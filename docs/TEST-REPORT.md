@@ -339,7 +339,9 @@ Kiểm tra bằng truy vấn `up{job="..."}` (giá trị `1` = UP):
 | Loki `/ready` | ✅ ready |
 | Promtail phản hồi HTTP 200 | ✅ |
 | Loki có nhãn `service` | ✅ |
-| **Số service được thu log** | ✅ **12**: `backend`, `cadvisor`, `frontend`, `grafana`, `loki`, `nginx`, `nginx-exporter`, `pgadmin`, `postgres`, `postgres-exporter`, `prometheus`, `promtail` |
+| **Số service được thu log** | ✅ **13** (khi bật profile `test`): `backend`, `cadvisor`, `frontend`, `grafana`, `loki`, `nginx`, `nginx-exporter`, `pgadmin`, `postgres`, `postgres-exporter`, `postgres-test`, `prometheus`, `promtail`. Khi tắt profile `test` còn **12** (không có `postgres-test`) |
+| **Loki KHÔNG publish cổng ra host** | ✅ 0 khai báo `ports:` — chỉ truy cập được từ trong mạng Docker |
+| **Chạy thật LogQL `{service="backend"}` qua Grafana** | ✅ 1 stream, có dòng log trả về |
 
 ---
 
@@ -355,7 +357,7 @@ Kiểm tra bằng truy vấn `up{job="..."}` (giá trị `1` = UP):
 | Số panel dữ liệu | 15 panel trong 5 nhóm |
 | Số truy vấn PromQL trong dashboard | 21 |
 | **Grafana → Prometheus chạy được truy vấn thật** (`sum(up)`) | ✅ trả về **5** |
-| **Grafana → Loki chạy được truy vấn thật** | ✅ trả về danh sách 12 service |
+| **Grafana → Loki chạy được truy vấn thật** | ✅ trả về danh sách 13 service |
 
 ### 7.2. Truy vấn PromQL đã xác minh có dữ liệu
 
