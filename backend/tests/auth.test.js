@@ -2,11 +2,11 @@
 // Kiểm thử xác thực: login, me, phân quyền cơ bản
 // ============================================================
 const request = require('supertest');
-const { app } = require('./helpers');
+const { app, ADMIN_USER, ADMIN_PASS } = require('./helpers');
 
 describe('AUTH /api/v1/auth', () => {
-  test('Login thành công với tài khoản seed admin/Admin@123', async () => {
-    const res = await request(app).post('/api/v1/auth/login').send({ username: 'admin', password: 'Admin@123' });
+  test('Login thành công với tài khoản seed quantrongbong', async () => {
+    const res = await request(app).post('/api/v1/auth/login').send({ username: ADMIN_USER, password: ADMIN_PASS });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.token).toBeDefined();
@@ -14,13 +14,13 @@ describe('AUTH /api/v1/auth', () => {
   });
 
   test('Login sai mật khẩu → 401', async () => {
-    const res = await request(app).post('/api/v1/auth/login').send({ username: 'admin', password: 'wrong-password' });
+    const res = await request(app).post('/api/v1/auth/login').send({ username: ADMIN_USER, password: 'wrong-password' });
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
   });
 
   test('Login thiếu trường → 400', async () => {
-    const res = await request(app).post('/api/v1/auth/login').send({ username: 'admin' });
+    const res = await request(app).post('/api/v1/auth/login').send({ username: ADMIN_USER });
     expect(res.status).toBe(400);
   });
 
@@ -30,11 +30,11 @@ describe('AUTH /api/v1/auth', () => {
   });
 
   test('GET /auth/me với token hợp lệ → 200', async () => {
-    const loginRes = await request(app).post('/api/v1/auth/login').send({ username: 'admin', password: 'Admin@123' });
+    const loginRes = await request(app).post('/api/v1/auth/login').send({ username: ADMIN_USER, password: ADMIN_PASS });
     const token = loginRes.body.data.token;
     const res = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.username).toBe('admin');
+    expect(res.body.data.username).toBe(ADMIN_USER);
     expect(res.body.data.password).toBeUndefined();
   });
 

@@ -167,7 +167,7 @@ Kỳ vọng: dòng đầu `HTTP 301 -> https://localhost:8443/`; dòng sau `HTTP
 
 ### 5.1 Đăng nhập
 
-- **Thao tác:** nhập `admin` / `Admin@123` → bấm **Đăng nhập**
+- **Thao tác:** nhập `quantrongbong` / `Trongbong123@` → bấm **Đăng nhập**
 - **Kết quả cần thấy:** vào được trang Tổng quan, góc phải hiện tên người dùng
 - 📸 **`04-dashboard.png`**
 

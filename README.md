@@ -368,11 +368,10 @@ docker compose down          # Dừng, GIỮ NGUYÊN dữ liệu
 
 | Tài khoản | Mật khẩu | Vai trò |
 |---|---|---|
-| `admin` | `Admin@123` | Quản trị viên |
+| `quantrongbong` | `Trongbong123@` | Quản trị viên |
 
-> ⚠️ Tài khoản này được **seed sẵn** cho mục đích demo, mật khẩu nằm công khai trong
-> `database/seeds/001_seed_data.sql`. **Phải đổi mật khẩu** trước khi dùng thật —
-> đăng nhập → menu người dùng → *Đổi mật khẩu*.
+> Tài khoản này được **seed sẵn** cho mục đích demo đồ án (mật khẩu công khai để tiện chấm điểm).
+> **Không dùng mật khẩu này cho hệ thống thật.** Có thể đổi bằng cách đăng nhập → menu người dùng → *Đổi mật khẩu*.
 
 Tài khoản pgAdmin và Grafana dùng giá trị trong `.env` (`PGADMIN_DEFAULT_EMAIL`,
 `PGADMIN_DEFAULT_PASSWORD`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`).
@@ -941,7 +940,7 @@ xem tại **[docs/HARDENING.md](docs/HARDENING.md)**.
 | Image `zcube/cadvisor` là mirror không chính thức | Trung bình | `gcr.io` không truy cập được trong môi trường thực hiện. Đã pin phiên bản `v0.45.0` thay vì `latest`. |
 | Chứng chỉ TLS tự ký | Trung bình | Chỉ dùng cho demo. Production phải dùng Let's Encrypt hoặc CA nội bộ. |
 | `promtail` mount `/var/run/docker.sock` | Trung bình | Cần thiết để Docker service discovery. Đã để **read-only** và không có quyền ghi. |
-| Mật khẩu seed `Admin@123` công khai trong repo | Cao | Bắt buộc đổi trước khi dùng thật. |
+| Mật khẩu seed `Trongbong123@` công khai trong repo (mục đích demo) | Cao | Chỉ dùng cho demo/chấm điểm; phải đổi nếu triển khai thật. |
 | Không có `mem_limit`/`cpus` cho container | Thấp | Container có thể chiếm hết tài nguyên host. |
 | `pgpass` chứa mật khẩu dạng plaintext trên đĩa | Trung bình | Đã gitignore. Production nên dùng Docker secrets. |
 

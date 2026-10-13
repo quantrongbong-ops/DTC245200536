@@ -10,9 +10,13 @@ const login = async (username, password) => {
   return res.body.data || null;
 };
 
-// Token admin (được seed sẵn, mật khẩu Admin@123)
+// Tài khoản admin seed — mật khẩu demo công khai (đồ án), đè được bằng TEST_ADMIN_PASS
+const ADMIN_USER = process.env.TEST_ADMIN_USER || 'quantrongbong';
+const ADMIN_PASS = process.env.TEST_ADMIN_PASS || 'Trongbong123@';
+
+// Token admin (được seed sẵn)
 const getAdminToken = async () => {
-  const data = await login('admin', 'Admin@123');
+  const data = await login(ADMIN_USER, ADMIN_PASS);
   return data ? data.token : null;
 };
 
@@ -29,4 +33,4 @@ const getStaffToken = async () => {
   return data ? data.token : null;
 };
 
-module.exports = { app, login, getAdminToken, getStaffToken };
+module.exports = { app, login, getAdminToken, getStaffToken, ADMIN_USER, ADMIN_PASS };

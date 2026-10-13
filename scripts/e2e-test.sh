@@ -11,7 +11,7 @@
 #
 # Tiền điều kiện:
 #   - `docker compose up -d` đã chạy, container healthy
-#   - Tài khoản admin đã được seed (admin / Admin@123)
+#   - Tài khoản admin đã được seed (quantrongbong / Trongbong123@)
 #
 # Cách dùng:
 #   bash scripts/e2e-test.sh
@@ -24,8 +24,8 @@ WEB_SSL_PORT="${WEB_SSL_PORT:-8443}"
 BASE="https://localhost:${WEB_SSL_PORT}"
 API="${BASE}/api/v1"
 
-APP_USER="${SMOKE_APP_USER:-admin}"
-APP_PASS="${SMOKE_APP_PASS:-Admin@123}"
+APP_USER="${SMOKE_APP_USER:-quantrongbong}"
+APP_PASS="${SMOKE_APP_PASS:-Trongbong123@}"
 
 PASS=0; FAIL=0; FAILED_NAMES=()
 

@@ -20,8 +20,8 @@ GRAFANA_PORT="${GRAFANA_PORT:-3002}"
 PGADMIN_HOST_PORT="${PGADMIN_HOST_PORT:-5051}"
 LOKI_URL_INTERNAL="http://localhost:3100"   # truy cập qua docker compose exec
 
-APP_USER="${SMOKE_APP_USER:-admin}"
-APP_PASS="${SMOKE_APP_PASS:-Admin@123}"
+APP_USER="${SMOKE_APP_USER:-quantrongbong}"
+APP_PASS="${SMOKE_APP_PASS:-Trongbong123@}"
 
 PASS=0
 FAIL=0

@@ -461,7 +461,7 @@ người dùng sau 500 request.
 for i in $(seq 1 25); do
   curl -k -s -o /dev/null -w "%{http_code} " \
     -X POST -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"sai"}' \
+    -d '{"username":"quantrongbong","password":"sai"}' \
     https://localhost:8443/api/v1/auth/login
 done; echo
 ```
@@ -536,8 +536,8 @@ docker compose exec postgres psql -U postgres -d restaurant_db -c \
 **Kết quả kỳ vọng:** cột `prefix` bắt đầu bằng `$2b$12$`, `len` = 60.
 **Không** được thấy mật khẩu dạng thô.
 
-**Giới hạn còn tồn tại:** Mật khẩu seed `Admin@123` yếu và **đã công khai trong repo**.
-Đây là rủi ro cao nếu triển khai thật. **Bắt buộc đổi mật khẩu** trước khi dùng.
+**Giới hạn còn tồn tại:** mật khẩu seed `Trongbong123@` công khai trong repo (mục đích demo).
+Chỉ dùng cho demo/chấm điểm; **phải đổi** trước khi dùng thật.
 
 ---
 
@@ -624,7 +624,7 @@ ghi nhận trung thực những gì **chưa** giải quyết được.
 | # | Rủi ro | Mức | Vì sao chưa xử lý |
 |---|---|---|---|
 | R1 | `cadvisor` chạy `privileged: true` | **Cao** | cAdvisor cần quyền này để đọc cgroup/diskstat của host. Bỏ đi thì mất phần lớn metric container. Đã giảm thiểu: chỉ ở `mon-net`, cổng loopback, mọi mount read-only. **Phương án thay thế nếu cần siết:** bỏ cAdvisor, chỉ dùng `node-exporter` + metric của ứng dụng — sẽ mất số liệu per-container. |
-| R2 | Mật khẩu seed `Admin@123` công khai | **Cao** | Là dữ liệu seed cố ý cho demo. **Phải đổi** trước khi triển khai thật. |
+| R2 | Mật khẩu seed `Trongbong123@` công khai (mục đích demo) | **Cao** | Chỉ dùng cho demo/chấm điểm. **Phải đổi** trước khi triển khai thật. |
 | R3 | Image `zcube/cadvisor` là mirror không chính thức | Trung bình | `gcr.io` không truy cập được trong môi trường thực hiện. Đã pin `v0.45.0`. Rủi ro chuỗi cung ứng: image do bên thứ ba build. |
 | R4 | `promtail` mount `/var/run/docker.sock` | Trung bình | Bắt buộc để Docker service discovery. Đã để **read-only**. Container bị chiếm quyền có thể lợi dụng socket — dù read-only vẫn cho phép liệt kê container. |
 | R5 | `pgpass` chứa mật khẩu dạng plaintext | Trung bình | pgAdmin cần file này để kết nối không cần nhập mật khẩu. Đã gitignore. Production nên dùng Docker secrets. |

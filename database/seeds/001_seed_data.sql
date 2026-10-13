@@ -7,11 +7,11 @@
 TRUNCATE TABLE payments, order_items, orders, menu_items, categories, dining_tables, users RESTART IDENTITY CASCADE;
 
 -- ============================================================
--- Users: chỉ tài khoản admin
--- Password: Admin@123 (bcrypt, cost=12)
+-- Users: chỉ tài khoản admin (quantrongbong)
+-- Mật khẩu: lưu dạng bcrypt hash (cost=12); KHÔNG lưu mật khẩu thô trong repo.
 -- ============================================================
 INSERT INTO users (username, password, full_name, role, email, phone) VALUES
-('admin', '$2b$12$fAMCJgmgRTOaI.Fgl9oXR.CoOUWGFFc7aiKeWMo6YuylOY1RhL7Wi', 'Quản lý Admin', 'admin', 'admin@nhahang.com', '0901234567');
+('quantrongbong', '$2b$12$QZbvQ0UOYByYF6BiO684fuXHxUoOrgP/jDTIGXpJJuiV2USOy7Wh6', 'Quan Trọng Bổng', 'admin', 'quantrongbong@gmail.com', NULL);
 
 -- ============================================================
 -- Categories: Danh mục món

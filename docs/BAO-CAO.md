@@ -1049,7 +1049,7 @@ Một lệnh `git add .` sẽ đẩy toàn bộ lên GitHub. Đã bổ sung `bac
 | # | Rủi ro | Mức | Lý do chưa xử lý |
 |---|---|---|---|
 | R1 | `cadvisor` chạy `privileged: true` | **Cao** | cAdvisor cần quyền này để đọc cgroup và diskstat của host. Bỏ đi thì mất phần lớn số liệu. Đã giảm thiểu: chỉ ở `mon-net`, cổng loopback, mọi mount read-only |
-| R2 | Mật khẩu seed `Admin@123` công khai trong repo | **Cao** | Là dữ liệu seed cố ý cho demo. **Bắt buộc đổi** trước khi triển khai thật |
+| R2 | Mật khẩu seed `Trongbong123@` công khai (mục đích demo) | **Cao** | Chỉ dùng cho demo/chấm điểm. **Bắt buộc đổi** trước khi triển khai thật |
 | R3 | `zcube/cadvisor` là image mirror không chính thức | Trung bình | `gcr.io` không truy cập được trong môi trường thực hiện. Đã pin `v0.45.0` |
 | R4 | `promtail` mount `/var/run/docker.sock` | Trung bình | Bắt buộc để tự phát hiện container. Đã để read-only |
 | R5 | `pgpass` chứa mật khẩu plaintext trên đĩa | Trung bình | pgAdmin cần để kết nối tự động. Đã gitignore |
