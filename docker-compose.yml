@@ -1,0 +1,466 @@
+# ============================================================
+# Docker Compose - Nhà Hàng An Phúc (Restaurant Order Management)
+#
+# Kiến trúc:
+#   Người dùng -> nginx (revers proxy, 8083) -> frontend (SPA static)
+#                                            -> backend (API, 3001)
+#   backend  -> postgres (16)
+#   pgadmin  -> postgres
+#   prometheus -> prometheus, backend /metrics, postgres-exporter,
+#                 nginx-exporter, cadvisor
+#   grafana  -> prometheus (Phase 7: + loki)
+#   loki     <- promtail (log container restaurant-*)
+#
+# Mạng:
+#   app-net  : nginx, frontend, backend, postgres, pgadmin, exporters
+#   mon-net  : prometheus, grafana, loki, promtail, cadvisor,
+#              + backend/nginx/exporters (để scrape)
+# ============================================================
+name: restaurant-order-management
+
+services:
+  # ----------------------------------------------------------
+  # PostgreSQL 16 - database chính
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurant-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER:-appuser}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-restaurant_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-net
+
+  # ----------------------------------------------------------
+  # PostgreSQL 16 - DATABASE DÀNH RIÊNG CHO TEST
+  #
+  # Vì sao cần: tests/setup-env.js trỏ tới localhost:5433 với user appuser,
+  # database restaurant_db. Trước đây compose không có service này nên
+  # `npm test` luôn thất bại vì không kết nối được database.
+  #
+  # Đây là database DÙNG MỘT LẦN, tách hoàn toàn khỏi postgres production:
+  #  - volume riêng (restaurant-postgres-test-data)
+  #  - cổng riêng 5433, chỉ bind loopback
+  #  - mật khẩu test cố định KHÔNG phải secret thật (chỉ dùng nội bộ máy)
+  #  - nằm trong profile "test" nên `docker compose up` thường KHÔNG khởi động nó
+  #
+  # Bật khi cần chạy test:
+  #   docker compose --profile test up -d postgres-test
+  # ----------------------------------------------------------
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: restaurant-postgres-test
+    restart: unless-stopped
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: restaurant_db
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      APP_DB_USER: appuser
+      APP_DB_PASSWORD: apppassword
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d restaurant_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - test-net
+
+  # ----------------------------------------------------------
+  # pgAdmin 4 - quản trị database qua web
+  # ----------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:8.5
+    container_name: restaurant-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./docker/pgadmin/pgpass:/pgpass:ro
+    # Chỉ bind loopback: pgAdmin là công cụ quản trị, KHÔNG được lộ ra mạng ngoài.
+    ports:
+      - "127.0.0.1:${PGADMIN_HOST_PORT:-5051}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/login || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-net
+
+  # ----------------------------------------------------------
+  # Backend API (Node.js/Express)
+  # ----------------------------------------------------------
+  backend:
+    build: ./backend
+    image: restaurant-backend:1.0.0
+    container_name: restaurant-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-restaurant_db}
+      DB_USER: ${APP_DB_USER:-appuser}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      LOKI_URL: http://loki:3100
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-net
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Frontend (SPA build bằng Vite, phục vụ bởi nginx nội bộ)
+  # ----------------------------------------------------------
+  frontend:
+    build: ./frontend
+    image: restaurant-frontend:1.0.0
+    container_name: restaurant-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - app-net
+
+  # ----------------------------------------------------------
+  # certgen - sinh chứng chỉ TLS tự ký (chạy một lần rồi thoát)
+  #
+  # Vì sao cần service riêng: image nginx:alpine KHÔNG có sẵn lệnh openssl
+  # (đã kiểm chứng bằng `docker run --rm nginx:alpine which openssl` → rỗng).
+  # Service này chạy trước nginx, chỉ sinh chứng chỉ nếu chưa tồn tại, nên
+  # chạy lại compose nhiều lần cũng không ghi đè và không làm mất cert cũ.
+  # ----------------------------------------------------------
+  certgen:
+    image: alpine/openssl:3.3.2
+    container_name: restaurant-certgen
+    restart: "no"
+    command:
+      - req
+      - -x509
+      - -nodes
+      - -days
+      - "825"
+      - -newkey
+      - rsa:2048
+      - -keyout
+      - /certs/server.key
+      - -out
+      - /certs/server.crt
+      - -subj
+      - /C=VN/ST=HCM/L=Ho Chi Minh/O=Nha Hang An Phuc/CN=localhost
+      - -addext
+      - subjectAltName=DNS:localhost,IP:127.0.0.1
+    volumes:
+      - ./nginx/certs:/certs
+      - ./nginx/scripts/certgen.sh:/certgen.sh:ro
+    entrypoint: ["/bin/sh", "/certgen.sh"]
+    networks:
+      - app-net
+
+  # ----------------------------------------------------------
+  # Nginx reverse proxy - điểm vào duy nhất cho người dùng
+  #
+  # Cổng publish:
+  #   8083 -> 80   (HTTP, chuyển hướng sang HTTPS)
+  #   8443 -> 443  (HTTPS, điểm vào chính)
+  # Cổng 8081 (stub_status) KHÔNG publish - chỉ dùng nội bộ cho exporter.
+  # ----------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: restaurant-nginx
+    restart: unless-stopped
+    environment:
+      # Biến này được envsubst nhúng vào default.conf.template
+      WEB_SSL_PORT: ${WEB_SSL_PORT:-8443}
+    volumes:
+      # Template -> image tự chạy envsubst -> /etc/nginx/conf.d/default.conf
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      # Chứng chỉ do service certgen sinh ra (read-only với nginx)
+      - ./nginx/certs:/etc/nginx/certs:ro
+    ports:
+      - "${WEB_PORT:-8083}:80"
+      - "${WEB_SSL_PORT:-8443}:443"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      certgen:
+        condition: service_completed_successfully
+    healthcheck:
+      # --no-check-certificate vì đây là chứng chỉ tự ký (busybox wget)
+      test: ["CMD-SHELL", "wget -q --spider --no-check-certificate https://127.0.0.1:443/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - app-net
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Prometheus
+  # ----------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: restaurant-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    # Chỉ bind loopback: Prometheus không cần truy cập từ ngoài, Grafana đọc qua mạng nội bộ mon-net.
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9091}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Grafana
+  # ----------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: restaurant-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    # Chỉ bind loopback: Grafana là trang quản trị, không lộ ra mạng ngoài.
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3002}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Loki - lưu trữ log
+  # ----------------------------------------------------------
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: restaurant-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Promtail - agent thu thập log container -> Loki
+  # ----------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: restaurant-promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      # Image grafana/promtail KHÔNG có wget/curl/nc/busybox
+      # (đã kiểm chứng: `command -v wget curl nc busybox` đều rỗng).
+      # Image dựa trên Debian và CÓ bash, nên dùng /dev/tcp của bash để
+      # kiểm tra HTTP server nội bộ đang phản hồi 200.
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/127.0.0.1/9080;
+          printf "GET /ready HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n" >&3;
+          head -1 <&3 | grep -q 200' || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mon-net
+
+  # ----------------------------------------------------------
+  # PostgreSQL exporter (metric DB cho Prometheus)
+  # ----------------------------------------------------------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: restaurant-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${APP_DB_USER:-appuser}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-restaurant_db}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9187/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app-net
+      - mon-net
+
+  # ----------------------------------------------------------
+  # Nginx exporter (metric của nginx reverse proxy)
+  # ----------------------------------------------------------
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.1.0
+    container_name: restaurant-nginx-exporter
+    restart: unless-stopped
+    # Scrape stub_status qua cổng NỘI BỘ 8081 (không publish ra host).
+    # Trước đây scrape qua cổng 80 nên stub_status bị lộ ra Internet.
+    command:
+      - '-nginx.scrape-uri=http://nginx:8081/stub_status'
+    depends_on:
+      nginx:
+        condition: service_healthy
+    # KHÔNG đặt Docker healthcheck cho service này.
+    #
+    # Lý do: image nginx/nginx-prometheus-exporter:1.1.0 là image distroless —
+    # chỉ chứa đúng binary /usr/bin/nginx-prometheus-exporter, KHÔNG có
+    # /bin/sh, /bin/bash hay /busybox (đã kiểm chứng bằng cách thử từng đường dẫn).
+    # Vì vậy mọi healthcheck dạng `CMD-SHELL` đều thất bại với lỗi
+    #   "exec: \"/bin/sh\": stat /bin/sh: no such file or directory"
+    #
+    # Cũng KHÔNG dùng healthcheck `CMD ... --version` vì cờ đó LUÔN trả về 0
+    # kể cả khi server HTTP bên trong đã chết → healthcheck luôn PASS giả tạo,
+    # tệ hơn là không có healthcheck.
+    #
+    # Dịch vụ này vẫn được giám sát chặt qua hai lớp có kiểm chứng thật:
+    #   1. Prometheus scrape job 'nginx-exporter' — kiểm tra `up{job="nginx-exporter"}`
+    #   2. scripts/smoke-test.sh mục 8 — assert target này phải UP
+    # và Docker vẫn tự khởi động lại khi tiến trình thoát (restart: unless-stopped).
+    networks:
+      - app-net
+      - mon-net
+
+  # ----------------------------------------------------------
+  # cAdvisor - metric tài nguyên container
+  #
+  # Ghi chú hardening (xem docs/HARDENING.md):
+  #  - Image được PIN phiên bản (trước đây dùng tag `latest` → không tái lập được).
+  #    gcr.io không truy cập được trong môi trường này nên dùng mirror Docker Hub
+  #    zcube/cadvisor. Đây là image mirror không chính thức → rủi ro chuỗi cung ứng,
+  #    đã ghi rõ trong tài liệu hardening.
+  #  - `privileged: true` là YÊU CẦU của cAdvisor để đọc được cgroup/diskstat của host.
+  #    Bỏ cờ này thì cAdvisor mất phần lớn số liệu. Vì vậy GIỮ privileged nhưng:
+  #      + chỉ chạy trên mạng mon-net (không có app-net)
+  #      + chỉ bind cổng ra loopback
+  #      + mount read-only
+  #  - `no-new-privileges` không đặt được cùng privileged:true (privileged đã cấp
+  #    toàn quyền, cờ này vô nghĩa). Đây là rủi ro còn tồn tại, đã ghi trong tài liệu.
+  # ----------------------------------------------------------
+  cadvisor:
+    image: zcube/cadvisor:v0.45.0
+    container_name: restaurant-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "127.0.0.1:${CADVISOR_PORT:-8082}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mon-net
+
+volumes:
+  postgres_data:
+    name: restaurant-postgres-data
+  pgadmin_data:
+    name: restaurant-pgadmin-data
+  prometheus_data:
+    name: restaurant-prometheus-data
+  grafana_data:
+    name: restaurant-grafana-data
+  loki_data:
+    name: restaurant-loki-data
+  # Volume riêng cho database test - có thể xoá tự do, KHÔNG chứa dữ liệu thật
+  postgres_test_data:
+    name: restaurant-postgres-test-data
+
+networks:
+  app-net:
+    name: restaurant-app-net
+  mon-net:
+    name: restaurant-mon-net
+  # Mạng riêng cho database test - cô lập hoàn toàn khỏi app-net
+  test-net:
+    name: restaurant-test-net

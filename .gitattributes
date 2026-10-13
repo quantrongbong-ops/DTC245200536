@@ -1,0 +1,60 @@
+# ============================================================
+# Chuẩn hoá kiểu xuống dòng theo loại file
+#
+# VÌ SAO CẦN FILE NÀY:
+# Git trên Windows mặc định chuyển LF -> CRLF khi checkout (core.autocrlf=true).
+# Với shell script, ký tự CR ở cuối dòng làm hỏng shebang:
+#     #!/bin/bash\r  ->  "bad interpreter: /bin/bash^M: no such file or directory"
+#
+# Điều này đặc biệt nghiêm trọng với dự án này vì:
+#   - database/init.sh được PostgreSQL container chạy khi khởi tạo database
+#   - nginx/scripts/certgen.sh sinh chứng chỉ TLS
+#   - scripts/*.sh là bộ kiểm thử smoke và E2E
+# Nếu các file này bị checkout với CRLF, chúng sẽ hỏng bên trong container Linux.
+# ============================================================
+
+# Mặc định: Git tự quyết định, không cảnh báo
+* text=auto
+
+# ---- BẮT BUỘC LF: script chạy trên Linux/Docker ----
+*.sh                text eol=lf
+*.bash              text eol=lf
+Dockerfile          text eol=lf
+*.dockerfile        text eol=lf
+*.conf              text eol=lf
+*.template          text eol=lf
+
+# ---- BẮT BUỘC LF: cấu hình dịch vụ chạy trong container ----
+*.yml               text eol=lf
+*.yaml              text eol=lf
+*.sql               text eol=lf
+*.json              text eol=lf
+*.xml               text eol=lf
+*.info              text eol=lf
+
+# ---- Markdown: LF để diff trên GitHub hiển thị đúng ----
+*.md                text eol=lf
+
+# ---- Windows: dùng CRLF ----
+*.bat               text eol=crlf
+*.cmd               text eol=crlf
+*.ps1               text eol=crlf
+
+# ---- File nhị phân: không chạm vào ----
+*.png               binary
+*.jpg               binary
+*.jpeg              binary
+*.gif               binary
+*.ico               binary
+*.webp              binary
+*.avif              binary
+*.woff              binary
+*.woff2             binary
+*.ttf               binary
+*.otf               binary
+*.eot               binary
+*.dump              binary
+
+# ---- File sinh tự động: không đưa vào thống kê ngôn ngữ ----
+package-lock.json   linguist-generated=true
+prometheus_data/**  export-ignore

@@ -1,0 +1,155 @@
+# ============================================================
+# Nginx Reverse Proxy - Nhà Hàng An Phúc
+#
+# File này là TEMPLATE. Image nginx chính thức sẽ chạy envsubst lên nó và
+# ghi kết quả vào /etc/nginx/conf.d/default.conf khi container khởi động.
+# Biến ${WEB_SSL_PORT} lấy từ environment của container nginx.
+# (Các biến nginx như $host, $request_uri KHÔNG bị envsubst thay vì chúng
+#  không tồn tại trong environment.)
+#
+# Cổng:
+#   80   -> chuyển hướng sang HTTPS
+#   443  -> TLS, điểm vào chính của ứng dụng
+#   8081 -> stub_status NỘI BỘ, KHÔNG publish ra host, chỉ để exporter scrape
+# ============================================================
+
+# ------------------------------------------------------------
+# Chuyển hướng toàn bộ HTTP sang HTTPS
+# ------------------------------------------------------------
+server {
+    # Lắng nghe cả IPv4 và IPv6.
+    # Vì sao cần: trong container, `localhost` phân giải thành ::1 (IPv6) trước.
+    # Nếu chỉ có `listen 80` (IPv4), tiến trình kết nối tới localhost sẽ bị
+    # "Connection refused" và healthcheck thất bại dù nginx vẫn chạy bình thường.
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    server_tokens off;
+
+    # Endpoint kiểm tra sống/chết, KHÔNG chuyển hướng (để healthcheck đơn giản)
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 301 https://$host:${WEB_SSL_PORT}$request_uri;
+    }
+}
+
+# ------------------------------------------------------------
+# HTTPS - điểm vào chính
+# ------------------------------------------------------------
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name _;
+
+    # Không lộ phiên bản nginx trong header Server và trang lỗi
+    server_tokens off;
+
+    # ---- TLS ----
+    # Chứng chỉ TỰ KÝ cho môi trường demo/học tập.
+    # Trình duyệt SẼ cảnh báo "Not secure" - đây là hành vi đúng, không phải lỗi.
+    # Chứng chỉ tự ký KHÔNG tương đương chứng chỉ do CA tin cậy cấp.
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    client_max_body_size 10m;
+
+    # Endpoint kiểm tra nginx còn sống (không phụ thuộc backend)
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ---- Frontend SPA ----
+    location / {
+        proxy_pass http://frontend:8080;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+
+        include /etc/nginx/snippets/security-headers.conf;
+    }
+
+    # ---- Backend API ----
+    location /api/ {
+        proxy_pass http://backend:3001;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Giới hạn thời gian: backend có transaction DB, không nên treo vô hạn
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+
+        # Không đệm response của API để log/metrics phản ánh thời điểm thật
+        proxy_buffering off;
+
+        include /etc/nginx/snippets/security-headers.conf;
+    }
+
+    # ---- Health của backend (đi qua reverse proxy) ----
+    location = /health {
+        proxy_pass http://backend:3001;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+
+    # Chặn truy cập stub_status qua cổng công khai
+    location = /stub_status {
+        return 404;
+    }
+}
+
+# ------------------------------------------------------------
+# stub_status NỘI BỘ cho nginx-prometheus-exporter
+#
+# Cổng 8081 KHÔNG được publish trong docker-compose, nên chỉ container
+# trong mạng Docker mới gọi được. Trước đây stub_status nằm trên cổng 80
+# (cổng được publish) và chỉ chặn theo dải IP nội bộ - mà mọi request từ
+# Internet đều đi qua cầu Docker nên có IP thuộc dải nội bộ => bị lộ.
+# ------------------------------------------------------------
+server {
+    listen 8081;
+    listen [::]:8081;
+    server_name _;
+    server_tokens off;
+
+    location = /stub_status {
+        stub_status;
+        access_log off;
+
+        allow 127.0.0.1;
+        allow 10.0.0.0/8;
+        allow 172.16.0.0/12;
+        allow 192.168.0.0/16;
+        deny all;
+    }
+
+    location / {
+        return 404;
+    }
+}

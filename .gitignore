@@ -1,0 +1,38 @@
+# ============================================================
+# Git ignore - KHÔNG commit secrets, dependencies, build artifacts
+# ============================================================
+
+# Secrets & môi trường cục bộ
+.env
+docker/pgadmin/servers.json
+docker/pgadmin/pgpass
+
+# Chứng chỉ TLS sinh tự động bởi service certgen - KHÔNG commit khoá riêng tư
+nginx/certs/
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Dump / sao lưu database - chứa dữ liệu thật và hash mật khẩu, KHÔNG commit
+backups/
+*.sql.gz
+*.dump
+
+# Dữ liệu local (nếu dùng bind mount thay volume)
+postgres_data/
+pgadmin_data/
+
+# OS
+.DS_Store
+Thumbs.db
