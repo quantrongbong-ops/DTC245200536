@@ -1,0 +1,21 @@
+# ============================================================
+# Grafana provisioning: nạp dashboard từ file JSON
+#
+# Trước đây thư mục này KHÔNG tồn tại → Grafana khởi động với 0 dashboard,
+# người chấm phải tự tạo bằng tay. Provider này tự nạp mọi file .json
+# trong ./json ở mỗi lần khởi động, nên dashboard là một phần của mã nguồn.
+# ============================================================
+apiVersion: 1
+
+providers:
+  - name: 'Restaurant Dashboards'
+    orgId: 1
+    folder: 'Restaurant'
+    type: file
+    # Cho phép sửa trực tiếp trên UI; thay đổi sẽ được ghi lại vào file JSON
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: false

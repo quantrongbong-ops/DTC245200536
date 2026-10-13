@@ -1,0 +1,23 @@
+# ============================================================
+# Grafana provisioning: datasource Loki
+#
+# Trước đây file này KHÔNG tồn tại, nên Grafana không có datasource Loki
+# và không thể chạy LogQL trong Explore (yêu cầu của đề tài).
+# ============================================================
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    # UID cố định để tham chiếu không phụ thuộc UID tự sinh
+    uid: loki
+    access: proxy
+    # Địa chỉ DNS nội bộ Docker, KHÔNG dùng localhost
+    # (localhost bên trong container Grafana là chính nó, không phải Loki)
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      # Giới hạn số dòng mỗi truy vấn để tránh treo trình duyệt khi demo
+      maxLines: 1000
+      timeout: 60

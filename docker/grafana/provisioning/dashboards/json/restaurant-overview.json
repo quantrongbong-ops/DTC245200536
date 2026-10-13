@@ -1,0 +1,525 @@
+{
+  "uid": "restaurant-overview",
+  "title": "Tổng quan hệ thống",
+  "description": "Dashboard giám sát hệ thống quản lý nhà hàng An Phúc. Mọi truy vấn dùng tên metric đã được xác minh tồn tại trên hệ thống thật.",
+  "tags": ["restaurant", "overview"],
+  "timezone": "Asia/Ho_Chi_Minh",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+  },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Chỉ số then chốt",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Target Prometheus đang UP",
+      "description": "Số target có trạng thái UP. Phải bằng 5 khi hệ thống khoẻ mạnh.",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(up)",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "none",
+        "colorMode": "background",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 4 },
+              { "color": "green", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Đơn hàng đã tạo",
+      "description": "Tổng số đơn hàng đã tạo kể từ khi backend khởi động (counter, không reset về 0 khi không có traffic).",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_orders_created_total",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Doanh thu tích luỹ",
+      "description": "Tổng doanh thu của các đơn đã hoàn thành (VND). Đây là Counter cộng dồn, được ghi nhận khi đơn chuyển sang trạng thái completed — qua cả luồng thanh toán lẫn đổi trạng thái thủ công.",
+      "gridPos": { "h": 5, "w": 5, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_revenue_total",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyVND",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Request/giây",
+      "description": "Tốc độ request API backend, tính trung bình trên 5 phút.",
+      "gridPos": { "h": 5, "w": 4, "x": 13, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(restaurant_http_requests_total[5m]))",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "purple" } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Kết nối đang mở tới API",
+      "description": "Số request đang được xử lý tại thời điểm hiện tại (gauge, tăng khi có request vào và giảm khi response hoàn tất).",
+      "gridPos": { "h": 5, "w": 3, "x": 17, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_active_connections",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "yellow" } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Kết nối PostgreSQL",
+      "description": "Số kết nối đang mở tới database restaurant_db, đọc bởi postgres-exporter. So sánh với pool max = 20 của backend.",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_stat_database_numbackends{datname=\"restaurant_db\"}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 15 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "API backend",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Tốc độ request theo mã trạng thái HTTP",
+      "description": "Số request mỗi giây, tách theo mã trạng thái. Tăng đột biến ở nhóm 4xx/5xx là dấu hiệu lỗi ứng dụng hoặc tấn công.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (status_code) (rate(restaurant_http_requests_total[5m]))",
+          "legendFormat": "HTTP {{status_code}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 12, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Thời gian phản hồi API (phân vị 50 / 95 / 99)",
+      "description": "Tính từ histogram restaurant_http_request_duration_seconds_bucket. Phân vị 95 cho biết 95% request nhanh hơn giá trị hiển thị — phản ánh trải nghiệm thực tế tốt hơn giá trị trung bình.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "P50",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(restaurant_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "P95",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(restaurant_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "P99",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(restaurant_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 4,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Tài nguyên container (cAdvisor)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "CPU từng container (lõi CPU)",
+      "description": "Tốc độ tiêu thụ CPU theo giây, quy đổi ra số lõi. Giá trị 1.0 nghĩa là dùng trọn 1 lõi CPU.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"restaurant-.*\"}[5m]))",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 3,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Bộ nhớ từng container",
+      "description": "Bộ nhớ đang sử dụng của từng container (byte). Dùng để phát hiện rò rỉ bộ nhớ.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (name) (container_memory_usage_bytes{name=~\"restaurant-.*\"})",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "PostgreSQL và Nginx",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Kết nối PostgreSQL theo database",
+      "description": "Số backend đang kết nối tới từng database, đọc bởi postgres-exporter.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_stat_database_numbackends",
+          "legendFormat": "{{datname}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Dung lượng database PostgreSQL",
+      "description": "Kích thước từng database trên đĩa.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_database_size_bytes",
+          "legendFormat": "{{datname}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Nginx - request và kết nối",
+      "description": "Số request Nginx đã phục vụ mỗi giây và số kết nối đang mở. Đọc từ stub_status qua nginx-prometheus-exporter (cổng nội bộ 8081).",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(nginx_http_requests_total[5m])",
+          "legendFormat": "request/giây"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "nginx_connections_active",
+          "legendFormat": "kết nối đang mở"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Tiến trình backend (Node.js)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Bộ nhớ tiến trình Node.js",
+      "description": "RSS (bộ nhớ thực tế chiếm) so với heap đang dùng của V8. Chênh lệch lớn kéo dài là dấu hiệu rò rỉ bộ nhớ.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_api_process_resident_memory_bytes",
+          "legendFormat": "RSS (thực tế)"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_api_nodejs_heap_size_used_bytes",
+          "legendFormat": "Heap đang dùng"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_api_nodejs_heap_size_total_bytes",
+          "legendFormat": "Heap đã cấp"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Độ trễ vòng lặp sự kiện Node.js (event loop lag)",
+      "description": "Thời gian vòng lặp sự kiện bị chặn. Giá trị cao nghĩa là backend đang bận xử lý đồng bộ và làm chậm mọi request khác.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_api_nodejs_eventloop_lag_mean_seconds",
+          "legendFormat": "trung bình"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "restaurant_api_nodejs_eventloop_lag_p99_seconds",
+          "legendFormat": "p99"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 4,
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
