@@ -1,0 +1,34 @@
+# ============================================================
+# Promtail - thu thập log container gửi về Loki
+# Chỉ thu log các container của project restaurant-* (tránh thu log
+# của các project khác và tránh lộ secrets).
+# ============================================================
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # Chỉ giữ container của project này (tên bắt đầu restaurant-)
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/restaurant-.*'
+        action: keep
+      # Gán nhãn service từ tên container: restaurant-postgres -> postgres
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/restaurant-(.*)'
+        target_label: 'service'
+      # Nhãn job cố định
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/restaurant-(.*)'
+        replacement: 'restaurant'
+        target_label: 'job'
