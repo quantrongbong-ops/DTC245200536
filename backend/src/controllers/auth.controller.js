@@ -6,37 +6,45 @@ const { query } = require('../config/database');
 const { generateToken } = require('../middlewares/auth.middleware');
 const logger = require('../utils/logger');
 
+// Hash giả dùng để cân bằng thời gian phản hồi khi tài khoản không tồn tại,
+// tránh lộ thông tin "tài khoản có tồn tại hay không" qua thời gian (timing attack).
+const DUMMY_PASSWORD_HASH = '$2b$12$DdNRYPoJFSdUjnj7wUrVruejG/DG6QX4K1BaBkxDnqlIDgCvoBiCm';
+
 // POST /api/v1/auth/login
 // Hỗ trợ đăng nhập bằng username HOẶC email
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    const identifier = String(username || '').trim().toLowerCase();
+    const identifier = typeof username === 'string' ? username.trim().toLowerCase() : '';
 
-    if (!identifier || !password) {
+    // Phải là chuỗi hợp lệ — nếu password là số/object, bcrypt.compare sẽ ném lỗi
+    // và trả 500 thay vì 400 như mong đợi.
+    if (!identifier || typeof password !== 'string' || !password) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập tài khoản và mật khẩu.' });
     }
 
+    // Dùng LOWER(username/email) để đăng nhập KHÔNG phân biệt hoa/thường.
+    // Trước đây code lower-case đầu vào nhưng so sánh `=` phân biệt hoa/thường,
+    // nên bất kỳ tài khoản nào có chữ hoa trong username/email (tạo thủ công,
+    // import SQL, chỉnh tay qua pgAdmin...) đều bị khoá đăng nhập vĩnh viễn.
     const result = await query(
-      'SELECT id, username, password, full_name, role, email, is_active FROM users WHERE username = $1 OR email = $1',
+      'SELECT id, username, password, full_name, role, email, is_active FROM users WHERE LOWER(username) = $1 OR LOWER(email) = $1',
       [identifier]
     );
 
     const user = result.rows[0];
 
-    if (!user) {
-      logger.warn('Login attempt with invalid username:', { username, ip: req.ip });
+    // Luôn chạy bcrypt.compare kể cả khi không tìm thấy user để thời gian phản hồi
+    // không phụ thuộc vào việc tài khoản có tồn tại hay không (chống user enumeration).
+    const isValidPassword = await bcrypt.compare(password, user ? user.password : DUMMY_PASSWORD_HASH);
+
+    if (!user || !isValidPassword) {
+      logger.warn('Login attempt failed:', { username: identifier, ip: req.ip });
       return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không đúng.' });
     }
 
     if (!user.is_active) {
       return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa.' });
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      logger.warn('Login attempt with wrong password:', { username, ip: req.ip });
-      return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không đúng.' });
     }
 
     const token = generateToken({
@@ -99,6 +107,7 @@ const changePassword = async (req, res) => {
 
     const result = await query('SELECT password FROM users WHERE id = $1', [req.user.id]);
     const user = result.rows[0];
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
 
     const isValid = await bcrypt.compare(current_password, user.password);
     if (!isValid) {

@@ -44,13 +44,6 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Auth rate limiting (chặt hơn)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { success: false, message: 'Quá nhiều lần đăng nhập thất bại.' },
-});
-
 // ============================================================
 // Standard Middleware
 // ============================================================
@@ -111,7 +104,7 @@ app.get('/metrics', metricsHandler);
 // ============================================================
 const API_PREFIX = '/api/v1';
 
-app.use(`${API_PREFIX}/auth`, authLimiter, authRoutes);
+app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/categories`, categoryRoutes);
 app.use(`${API_PREFIX}/menu-items`, menuItemRoutes);
